@@ -1,49 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Single-particle Eigenstate Thermolization in Polariton Hamiltonians. Photonic Wire Model
-# **Ribeiro Group Rotation Project A**
-# 
-# Brian Zhao, 09 Sept 2022
-
-# The following is adapted from Ribeiro, R. F. _Multimode Polariton Effects on Molecular Energy Transport and Spectral Fluctuations_. Commun Chem 2022, 5 (1), 1–10. https://doi.org/10.1038/s42004-022-00660-0.
-# 
-# ### Model Hamiltonian
-# #### Cavity Hamiltonian
-# The empty cavity Hamiltonian is given by
-# $$
-# H_{\text{L}}=\sum_q \epsilon_q a_q^{\dagger}a_q,
-# $$
-# where
-# $$
-# \epsilon_q = \frac{\hbar c}{\sqrt{\epsilon}}\sqrt{q_0^2+q^2},
-# $$
-# where $q_0=\sqrt{(\pi/L_z)^2+(\pi/L_y)^2}$ is a constant, and $q=2\pi m/L$ ($m\in \mathcal{Z}$) are the _cavity modes_.
-# 
-# #### Matter Hamiltonian
-# The Hamiltonian for the molecules are given by
-# $$
-# H_{\text{M}}=\sum_{i=1}^{N_{\text{M}}}(\epsilon_{\text{M}}+\sigma_i)b_i^+b_i^-,
-# $$
-# where $b_i^+=|1_i\rangle\langle 0_i|$ and $b_i^-=|0_i\rangle\langle 1_i|$ creates and annihilates an excitation at the $i$-th molecule respectively, and $\sigma_i$ is drawn from a normal distribution with variance $\sigma^2$.
-# 
-# #### Light-matter Hamiltonian
-# Applying the Coulomb gauge in the rotating-wave approximation (ignoring double raising and lowering), we have
-# $$
-# H_{\text{LM}}=\sum_{j=1}^{N_{\text{M}}}\sum_q\frac{-i\Omega_{\text{R}}}{2}\sqrt{\frac{\epsilon_{\text{M}}}{N_{\text{M}}\epsilon_q}}\frac{\mu_j}{\mu_0}\left(e^{iqx_j}b_j^+a_q-e^{-iqx_j}a_q^{\dagger}b_j^- \right),
-# $$
-# where $\Omega_{\text{R}}=\mu_0\sqrt{\hbar\omega_0N_{\text{M}}/2\epsilon LL_yL_z}$, and $\mu_j$ is drawn from a normal distribution with variance $\sigma_{\mu}^2$.
-# 
-# We assume there is only one photon.
-
-# In[1]:
-
-
 import numpy as np
 import scipy.constants as cst
 import matplotlib.pyplot as plt
 import pickle
-get_ipython().run_line_magic('matplotlib', 'widget')
 
 q_to_ev = cst.c*cst.hbar/cst.e
 
@@ -87,13 +48,17 @@ class QuantumWire:
         return np.sqrt((np.pi/self.Lz)**2 + (np.pi/self.Ly)**2 + (2*np.pi*m/self.L)**2) * q_to_ev/np.sqrt(self.eps)
 
     def generate_hamil(self):
+        # photon_energies goes from -N to +N as required, cavity_modes is order like [0,1,-1,2,-2,3,-3,..,N,-N] (doubly degenerate other than lowest mode)
         self.photon_energies = np.array([self.e_q(_) for _ in range(-self.n,self.n+1)])
         self.cavity_modes = np.array([(_,_) for _ in self.photon_energies[self.n+1:]]).flatten()
         self.cavity_modes = np.insert(self.cavity_modes,0,self.photon_energies[self.n])
+        
         self.mol_energies = np.array([self.rng.normal(self.em_mean, self.em_sigma) for _ in range(self.num_mol)])
         
         self.hamil = np.diag(np.concatenate([self.photon_energies,self.mol_energies])) # Fill in the diagonal elements
         self.hamil = self.hamil.astype('complex128')
+        
+        self.x_loc = np.array([self.a*_ + self.a*self.rng.uniform(-self.f,self.f) for _ in range(self.num_mol)])
         
         # Fill in the off-diagonal elements
         # We just fill in the light-matter block (first quadrant), and take the complex conjugate for the third quadrant.
@@ -103,7 +68,7 @@ class QuantumWire:
             for q in range(self.num_mol):
                 # omega_q was already computed in _diag
                 omega_q = self.photon_energies[q]
-                self.hamil[q,j] = (self.omega_r/2)*np.sqrt(self.mol_energies[j-self.num_mol]/(self.num_mol*omega_q))*(mu_j)*np.exp(-((q*2*np.pi/(self.a*self.num_mol))*(self.a*(j-self.num_mol)+self.a*self.rng.uniform(-self.f,self.f))-0.5*np.pi)*1j)
+                self.hamil[q,j] = (self.omega_r/2)*np.sqrt(self.mol_energies[j-self.num_mol]/(self.num_mol*omega_q))*(mu_j)*np.exp(-((q*2*np.pi/(self.a*self.num_mol))*(self.x_loc[j-self.num_mol])-0.5*np.pi)*1j)
                 self.hamil[j,q] = np.conjugate(self.hamil[q,j])
     
     def diag_hamil(self):
@@ -133,9 +98,10 @@ class QuantumWire:
         f.colorbar(im, ax=ax, fraction=0.05, pad=0.04, label='% photonic content')
         
     def plot_molecular_dos(self, num_bins):
+        # Bin the LP eigenvalues first
         weights,bins = np.histogram(self.lp_eigvals,bins=num_bins)
         bins = (bins[:-1]+bins[1:])/2
-        idx = np.cumsum(weights)
+        idx = np.cumsum(weights) # get the index ranges to add up the invidual LDOS in the range
         idx = np.insert(idx,0,0)
         ldos = np.array([np.sum(np.conjugate(self.eigvecs[self.num_mol:,_])*self.eigvecs[self.num_mol:,_])/self.num_mol for _ in range(self.num_mol)])
 
@@ -201,39 +167,29 @@ def get_gap_distribution(qw, nreal, num_bins=150, start=50, end=50, hist_range=(
     ax.bar(bins, weights, width=(bins[1]-bins[0]))
     ax.set_xlim(hist_range)
 
+def get_ldos(qw, nreal, num_bins=50, start=50, end=50, hist_range=(0,0.002)):
+    eigvals = np.zeros((nreal, qw.num_mol))
+    ldos = np.zeros((nreal, qw.num_mol))
+    
+    for i in range(nreal):
+        qw.generate_hamil()
+        qw.diag_hamil()
+        eigvals[i,:] = qw.lp_eigvals[:]
+        ldos[i,:] = np.array([np.sum(np.conjugate(qw.eigvecs[qw.num_mol:,_])*qw.eigvecs[qw.num_mol:,_])/qw.num_mol for _ in range(qw.num_mol)])
+        qw.refresh_rng()
 
-# ### Basic usage / tutorial
-# A `QuantumWire` object can be initialised as follows:
-# ```python
-# qw = QuantumWire(num_mol=1001, omega_r=0.3, a=10e-9, Ly=400e-9, Lz=200e-9, eps=3, em_mean=2.2, em_sigma=0.2, mu_sigma=0.1, f=0.05)
-# ```
-# where the arguments are 
-# - `num_mol`: Number of molecules. Must be $2N+1$, $N\in\mathcal{Z}^+$. The same number of cavity modes are created, with their quantum numbers $m=-N,-N+1,\dots,0,\dots,N-1,N$
-# - `omega_r`: The Rabi splitting, in units of eV.
-# - `a`: The average spacing between molecules, in units of meters.
-# - `Ly`: The y-length, in units of meters.
-# - `Lz`: The z-length, in units of meters.
-# - `eps`: The permittivity.
-# - `em_mean`: The average molecular excitation energy, in units of eV.
-# - `em_sigma`: The standard deviation of the excitation energy, in units of the **fraction of** Rabi splitting
-# - `mu_sigma`: The standard deviation of $\mu_j/\mu_0$, unitless.
-# - `f`: The range of variation in the position of each molecule as a fraction of `a`, unitless.
-# 
-# The Hamiltonian can be generated and diagonalized by
-# ```python
-# qw.generate_hamil()
-# qw.diag_hamil()
-# ```
-# And the eigenvalues and eigenvectors can be accessed by `qw.eigvals` and `qw.eigvecs` respectively. The lower and upper polariton eigenvalues and photonic contents can be accessed by `qw.(l/u)p_(eigvecs/photonic_content)`.
-# 
-# The lower/upper polariton bands can be plotted, together with their photonic contents:
+    
+    # Bin the LP eigenvalues first
+    eigvals = eigvals.flatten()
+    sort_indx  = np.argsort(eigvals)
+    ldos_sorted = (ldos.flatten())[sort_indx]
+    weights,bins = np.histogram(eigvals,bins=num_bins)
+    bins = (bins[:-1]+bins[1:])/2
+    idx = np.cumsum(weights) # get the index ranges to add up the invidual LDOS in the range
+    idx = np.insert(idx,0,0)
 
-ngrid = 20
-nreal = 15
-r_indx = np.zeros((ngrid,ngrid))
-for i,f in enumerate(np.linspace(0,0.25,ngrid)):
-    for j,mu_sigma in enumerate(np.linspace(0,1.5,ngrid)):
-        qw = QuantumWire(num_mol=501, omega_r=0.3, a=10e-9, Ly=400e-9, Lz=200e-9, eps=3, em_mean=2.2, em_sigma=0.2, mu_sigma=mu_sigma, f=f)
-        r_indx[i,j] = get_r_index(qw, nreal)
+    binned_ldos = np.array([np.sum(ldos_sorted[idx[i]:idx[i+1]]) for i in range(len(idx)-1)])
 
-np.savetxt('data/501_0.3_2.2_0.2_0-1.5_0-0.25.dat', r_indx)
+    f,ax = plt.subplots(figsize=(8,8))
+    ax.bar(bins,binned_ldos,width=(bins[1]-bins[0]))
+
