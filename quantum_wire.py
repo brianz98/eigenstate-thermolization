@@ -54,6 +54,8 @@ class QuantumWire:
         self.cavity_modes = np.insert(self.cavity_modes,0,self.photon_energies[self.n])
         
         self.mol_energies = np.array([self.rng.normal(self.em_mean, self.em_sigma) for _ in range(self.num_mol)])
+        if (np.any(self.mol_energies<0)):
+            print(f'{(self.mol_energies<0).sum()} negative excitation energies encountered in {self.num_mol}!')
         
         self.hamil = np.diag(np.concatenate([self.photon_energies,self.mol_energies])) # Fill in the diagonal elements
         self.hamil = self.hamil.astype('complex128')
@@ -68,7 +70,7 @@ class QuantumWire:
             for q in range(self.num_mol):
                 # omega_q was already computed in _diag
                 omega_q = self.photon_energies[q]
-                self.hamil[q,j] = (self.omega_r/2)*np.sqrt(self.mol_energies[j-self.num_mol]/(self.num_mol*omega_q))*(mu_j)*np.exp(-((q*2*np.pi/(self.a*self.num_mol))*(self.x_loc[j-self.num_mol])-0.5*np.pi)*1j)
+                self.hamil[q,j] = (self.omega_r/2)*np.emath.sqrt(self.mol_energies[j-self.num_mol]/(self.num_mol*omega_q))*(mu_j)*np.exp(-((q*2*np.pi/(self.a*self.num_mol))*(self.x_loc[j-self.num_mol])-0.5*np.pi)*1j)
                 self.hamil[j,q] = np.conjugate(self.hamil[q,j])
     
     def diag_hamil(self):
