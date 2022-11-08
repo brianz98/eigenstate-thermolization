@@ -5,7 +5,7 @@ from quantum_wire import *
 
 num_mol = 501
 a = 50
-em_mean = 1.8
+em_mean = 2.2
 sigma_lo = 0.001
 sigma_hi = 10
 sigma_points = 100

@@ -1,0 +1,2 @@
+/sharedscratch/zz376/jobs/eigenstate-thermolization/calcs/../quantum_wire.py:81: ComplexWarning: Casting complex values to real discards the imaginary part
+  photonic_content = photonic_content.astype('float64')
