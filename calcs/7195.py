@@ -6,18 +6,17 @@ from quantum_wire import *
 num_mol = 501
 a = 50
 em_mean = 1.8
-# using log scale
-sigma_lo = -5
-sigma_hi = 1.5
-sigma_points = 200
+sigma_lo = 0.001
+sigma_hi = 10
+sigma_points = 100
 
-es = 10**(np.linspace(sigma_lo,sigma_hi,sigma_points))
+es = np.linspace(sigma_lo,sigma_hi,sigma_points)
 avgs = np.zeros(len(es))
 
 for i, sigma in enumerate(es):
     print(f'sigma={sigma}')
     qw = QuantumWire(num_mol=num_mol, omega_r=0.01, a=a*1e-9, Ly=400e-9, Lz=200e-9, eps=3, em_mean=em_mean, em_sigma=sigma, mu_sigma=0, f=0)
-    avg = get_r_index(qw, 30, window_width=25)
+    avg = get_r_index(qw, 20, window_width=25)
     print(avg)
     avgs[i] = avg
 
