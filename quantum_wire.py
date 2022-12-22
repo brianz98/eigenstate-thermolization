@@ -160,7 +160,7 @@ def unpickle_wire(fname):
     return qw
 
 def get_properties(qw, nreal, fname=None, window_width=50):
-    w = np.zeros(nreal,3)
+    w = np.zeros((nreal,3))
     for r in range(nreal):
         qw.refresh_rng()
         qw.generate_hamil()
