@@ -3,13 +3,13 @@ import sys
 sys.path.append(os.path.relpath("../"))
 from quantum_wire import *
 
-num_mol = 1001
+num_mol = 501
 a = 50
 em_mean = 2.2
 # using log scale
-sigma_lo = -5
-sigma_hi = 1.5
-sigma_points = 200
+sigma_lo = 1.53
+sigma_hi = 2.0
+sigma_points = 15
 
 es = 10**(np.linspace(sigma_lo,sigma_hi,sigma_points))
 avgs = np.zeros(len(es))
