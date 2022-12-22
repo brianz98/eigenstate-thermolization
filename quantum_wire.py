@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
-
 import numpy as np
 import scipy.constants as cst
 import matplotlib.pyplot as plt
 import pickle
+%matplotlib widget
 
 q_to_ev = cst.c*cst.hbar/cst.e
 
@@ -54,8 +54,6 @@ class QuantumWire:
         self.cavity_modes = np.insert(self.cavity_modes,0,self.photon_energies[self.n])
         
         self.mol_energies = np.array([self.rng.normal(self.em_mean, self.em_sigma) for _ in range(self.num_mol)])
-        if (np.any(self.mol_energies<0)):
-            print(f'{(self.mol_energies<0).sum()} negative excitation energies encountered in {self.num_mol}!')
         
         self.hamil = np.diag(np.concatenate([self.photon_energies,self.mol_energies])) # Fill in the diagonal elements
         self.hamil = self.hamil.astype('complex128')
@@ -70,7 +68,7 @@ class QuantumWire:
             for q in range(self.num_mol):
                 # omega_q was already computed in _diag
                 omega_q = self.photon_energies[q]
-                self.hamil[q,j] = (self.omega_r/2)*np.emath.sqrt(self.mol_energies[j-self.num_mol]/(self.num_mol*omega_q))*(mu_j)*np.exp(-((q*2*np.pi/(self.a*self.num_mol))*(self.x_loc[j-self.num_mol])-0.5*np.pi)*1j)
+                self.hamil[q,j] = (self.omega_r/2)*np.sqrt(self.mol_energies[j-self.num_mol]/(self.num_mol*omega_q))*(mu_j)*np.exp(-((q*2*np.pi/(self.a*self.num_mol))*(self.x_loc[j-self.num_mol])-0.5*np.pi)*1j)
                 self.hamil[j,q] = np.conjugate(self.hamil[q,j])
     
     def diag_hamil(self):
@@ -115,6 +113,45 @@ class QuantumWire:
     def refresh_rng(self):
         self.rng = np.random.default_rng()
         
+    def get_ipr(self, window_width=50):
+        """
+        Inverse participation ratio
+        """
+        pi = 0.0
+        for psi in range(len(self.eigvals)):
+            for n in range(self.num_mol+self.n-window_width,self.num_mol+self.n+window_width):
+                pi += (np.conjugate(self.eigvecs[n,psi])*self.eigvecs[n,psi])**2
+
+        pi /= window_width*2
+        pi = pi.real
+        
+        return pi
+    
+    def get_r_index(self, window_width=50):
+        """
+        Gets the r index as defined in eqn. 10 of 10.1016/j.aop.2021.168469. 
+        0.5307 is the theoretical GOE result, and Poisson is 0.3863.
+        """
+        lvls = self.lp_eigvals[self.n-window_width:self.n+window_width]
+        s = lvls[1:]-lvls[:-1]
+        ra = np.array([min(s[i],s[i+1])/max(s[i],s[i+1]) for i in range(len(s)-1)])
+        ra = np.average(ra)
+        
+        return ra
+    
+    def get_shannon_entropy(self, window_width=50):
+        s = 0.0
+        for psi in range(len(self.eigvals)):
+            pm_psi = np.dot(np.conjugate(self.eigvecs[self.num_mol:,psi]),self.eigvecs[self.num_mol:,psi])
+            pm_psi = pm_psi.real
+            for n in range(self.num_mol+self.n-window_width,self.num_mol+self.n+window_width):
+                pi = np.conjugate(self.eigvecs[n,psi])*self.eigvecs[n,psi]
+                pi = pi.real
+                s -= pi/pm_psi * np.log2(pi/pm_psi)
+
+        s /= len(qw.eigvals)
+        
+        return s
         
 def unpickle_wire(fname):
     with open(fname, 'br') as fhandle:
@@ -122,32 +159,27 @@ def unpickle_wire(fname):
     
     return qw
 
-def get_r_index(qw, nreal, fname=None, window_width=50, plot=False):
-    """
-    Gets the r index as defined in eqn. 10 of 10.1016/j.aop.2021.168469. 
-    0.5307 is the theoretical GOE result, and Poisson is 0.3863.
-    """
-    w = np.zeros(nreal)
+def get_properties(qw, nreal, fname=None, window_width=50):
+    w = np.zeros(nreal,3)
     for r in range(nreal):
         qw.refresh_rng()
         qw.generate_hamil()
         qw.diag_hamil()
-        lvls = qw.lp_eigvals[qw.n-window_width:qw.n+window_width]
-        s = lvls[1:]-lvls[:-1]
-        ra = np.array([min(s[i],s[i+1])/max(s[i],s[i+1]) for i in range(len(s)-1)])
-        w[r] = np.average(ra)
+        w[r,0] = qw.get_r_index(window_width)
+        w[r,1] = qw.get_ipr(window_width)
+        w[r,2] = qw.get_shannon_entropy(window_width)
 
-    avg = np.array([np.average(w[:i+1]) for i in range(len(w))])
-    err = np.array([avg[i]/np.sqrt((i+1)*window_width*2) for i in range(nreal)])
+    #avg = np.array([np.average(w[:i+1]) for i in range(len(w))])
+    #err = np.array([avg[i]/np.sqrt((i+1)*window_width*2) for i in range(nreal)])
     
-    if fname is not None:
-        np.savetxt(f'data/{fname}',avg)
+    #if fname is not None:
+    #    np.savetxt(f'data/{fname}',avg)
     
-    if plot:
-        f,ax = plt.subplots(figsize=(8,8))
-        ax.errorbar(np.arange(1,21),avg,yerr=err,marker='x')
+    #if plot:
+    #    f,ax = plt.subplots(figsize=(8,8))
+    #    ax.errorbar(np.arange(1,21),avg,yerr=err,marker='x')
     
-    return avg[-1]
+    return np.average(w, axis=0)
 
 def get_gap_distribution(qw, nreal, num_bins=150, start=50, end=50, hist_range=(0,0.002)):
     nstates = qw.num_mol - start - end
@@ -194,4 +226,3 @@ def get_ldos(qw, nreal, num_bins=50, start=50, end=50, hist_range=(0,0.002)):
 
     f,ax = plt.subplots(figsize=(8,8))
     ax.bar(bins,binned_ldos,width=(bins[1]-bins[0]))
-
