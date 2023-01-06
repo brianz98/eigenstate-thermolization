@@ -3,9 +3,9 @@ import sys
 sys.path.append(os.path.relpath("../"))
 from quantum_wire import *
 
-num_mol = 2001
+num_mol = 501
 a = 50
-em_mean = 1.8
+em_mean = 2.0
 # using log scale
 sigma_lo = -5
 sigma_hi = 1.5

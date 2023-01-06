@@ -4,7 +4,6 @@ import numpy as np
 import scipy.constants as cst
 import matplotlib.pyplot as plt
 import pickle
-%matplotlib widget
 
 q_to_ev = cst.c*cst.hbar/cst.e
 
@@ -149,7 +148,7 @@ class QuantumWire:
                 pi = pi.real
                 s -= pi/pm_psi * np.log2(pi/pm_psi)
 
-        s /= len(qw.eigvals)
+        s /= len(self.eigvals)
         
         return s
         
