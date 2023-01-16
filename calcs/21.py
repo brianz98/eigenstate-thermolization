@@ -3,7 +3,7 @@ import sys
 sys.path.append(os.path.relpath("../"))
 from quantum_wire import *
 
-num_mol = 501
+num_mol = 251
 a = 50
 em_mean = 2.2
 # using log scale
