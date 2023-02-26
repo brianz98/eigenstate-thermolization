@@ -181,6 +181,17 @@ def unpickle_wire(fname):
 
     return qw
 
+
+def get_r_everyother(qw, nreal, fname=None, window_width=50):
+    w = np.zeros(nreal)
+    for r in range(nreal):
+        qw.refresh_rng()
+        qw.generate_hamil()
+        qw.diag_hamil()
+        w[r] = qw.get_r_index_everyother(window_width)
+
+    return np.average(w)
+
 def get_properties(qw, nreal, fname=None, window_width=50):
     w = np.zeros((nreal,3))
     for r in range(nreal):
